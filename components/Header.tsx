@@ -17,9 +17,9 @@ export default function Header() {
   const { user, logout, isAuthenticated } = useAuth()
 
   return (
-    <header className="bg-white fixed top-0 left-0 right-0 z-50 border-b-4 border-gradient">
-      <div className="container py-8">
-        <div className="flex items-center justify-between">
+    <header className="bg-white fixed top-0 left-0 right-0 z-50 border-b-4 border-gradient h-[120px]">
+      <div className="container h-full flex items-center">
+        <div className="flex items-center justify-between w-full">
           <Link href="/" className="flex items-center">
             <Image
               src="/logo.png"
@@ -39,14 +39,18 @@ export default function Header() {
             </Link>
             
             {isAuthenticated && user ? (
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
+                  <Button variant="ghost" className="flex items-center gap-2 h-10">
                     <User className="h-4 w-4" />
                     <span className="text-sm font-medium">{user.fullName}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-lg">
+                <DropdownMenuContent 
+                  align="end" 
+                  className="w-56 bg-white border border-gray-200 shadow-lg"
+                  sideOffset={8}
+                >
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none text-gray-900">{user.fullName}</p>
@@ -63,8 +67,8 @@ export default function Header() {
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Cerrar Sesión</span>
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuContent>
+                </DropdownMenu>
             ) : (
               <Link
                 href="/login"

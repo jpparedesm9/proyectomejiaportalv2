@@ -75,6 +75,13 @@ body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
   padding-top: 120px;
+  overflow-x: hidden;
+}
+
+/* Prevenir cambios de scroll cuando se abre el dropdown */
+body[data-scroll-locked] {
+  overflow: hidden !important;
+  padding-right: 0 !important;
 }
 
 @layer utilities {
@@ -111,3 +118,4 @@ body {
     @apply bg-white;
   }
 }
+
