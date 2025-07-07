@@ -12,7 +12,7 @@ export default function HeroSection() {
 
   return (
     <>
-      {/* Main Hero Section with Green Gradient */}
+      {/* Main Hero Section with Green Gradient 
       <section className="bg-gradient-to-br from-primary-600 to-primary-700 py-20">
         <div className="container">
           <div className="max-w-4xl mx-auto text-center">
@@ -32,9 +32,9 @@ export default function HeroSection() {
             </div>
           </div>
         </div>
-      </section>
+      </section>*/}
 
-      {/* Popular Searches Section */}
+      {/* Popular Searches Section 
       <section className="bg-primary-50 py-6">
         <div className="container">
           <div className="max-w-4xl mx-auto text-center">
@@ -52,6 +52,7 @@ export default function HeroSection() {
           </div>
         </div>
       </section>
+      */}
     </>
   )
 }

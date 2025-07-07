@@ -1,17 +1,114 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Building2,
   MapPin,
   Map,
   FileImage,
   ConstructionIcon as Construction,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  FileText,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/AuthContext"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 export default function ServicesSection() {
   const router = useRouter()
+  const authContext = useAuth()
   const [activeTab, setActiveTab] = useState("ciudadanos")
+  
+  // Log para debug
+  useEffect(() => {
+    console.log("ServicesSection - Full auth context:", authContext)
+    console.log("ServicesSection - Auth state:", { 
+      isAuthenticated: authContext.isAuthenticated, 
+      user: authContext.user, 
+      loading: authContext.loading 
+    })
+  }, [authContext])
+  
+  // Datos de ejemplo para los trámites del usuario
+  const userTramites = [
+    {
+      id: "TR-2024-001",
+      tipo: "IPRUS",
+      descripcion: "Informe Previo de Regulación Urbana de Suelo",
+      fechaInicio: "2024-12-15",
+      estado: "en_proceso",
+      progreso: 65,
+      proximaAccion: "Revisión técnica pendiente"
+    },
+    {
+      id: "TR-2024-002",
+      tipo: "CUSAC",
+      descripcion: "Certificado de Uso de Suelo para Actividades Comerciales",
+      fechaInicio: "2024-12-10",
+      estado: "completado",
+      progreso: 100,
+      proximaAccion: "Disponible para descarga"
+    },
+    {
+      id: "TR-2024-003",
+      tipo: "Registro de Planos",
+      descripcion: "Registro de Planos Arquitectónicos",
+      fechaInicio: "2024-12-20",
+      estado: "pendiente",
+      progreso: 25,
+      proximaAccion: "Esperando documentación adicional"
+    },
+    {
+      id: "TR-2023-158",
+      tipo: "ICUS",
+      descripcion: "Informe de Compatibilidad de Uso de Suelo",
+      fechaInicio: "2023-11-28",
+      estado: "rechazado",
+      progreso: 0,
+      proximaAccion: "Requiere nueva solicitud"
+    }
+  ]
+  
+  const getEstadoBadge = (estado: string) => {
+    switch (estado) {
+      case "en_proceso":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">En Proceso</Badge>
+      case "completado":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Completado</Badge>
+      case "pendiente":
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Pendiente</Badge>
+      case "rechazado":
+        return <Badge variant="destructive">Rechazado</Badge>
+      default:
+        return <Badge>{estado}</Badge>
+    }
+  }
+  
+  const getEstadoIcon = (estado: string) => {
+    switch (estado) {
+      case "en_proceso":
+        return <Clock className="w-4 h-4 text-blue-600" />
+      case "completado":
+        return <CheckCircle className="w-4 h-4 text-green-600" />
+      case "pendiente":
+        return <AlertCircle className="w-4 h-4 text-yellow-600" />
+      case "rechazado":
+        return <AlertCircle className="w-4 h-4 text-red-600" />
+      default:
+        return <FileText className="w-4 h-4 text-gray-600" />
+    }
+  }
   
   const handleCardClick = (title: string) => {
     if (title.includes("IPRUS")) {
@@ -101,19 +198,103 @@ export default function ServicesSection() {
             })}
           </div>
         ) : (
-          <div className="text-center py-16">
-            <div className="bg-primary-50 rounded-lg p-12 max-w-2xl mx-auto">
-              <h3 className="text-2xl font-bold text-primary-700 mb-4">Mis Trámites</h3>
-              <p className="text-gray-600 mb-6">
-                Para ver tus trámites en curso, debes iniciar sesión con tu cuenta personal.
-              </p>
-              <button
-                onClick={() => router.push("/iniciar-sesion")}
-                className="bg-secondary-500 hover:bg-secondary-600 text-white font-semibold py-3 px-8 rounded-full transition-colors duration-200 shadow-md hover:shadow-lg"
-              >
-                Iniciar Sesión
-              </button>
-            </div>
+          <div>
+            {authContext.loading ? (
+              <div className="text-center py-16">
+                <div className="animate-pulse">
+                  <div className="h-8 bg-gray-200 rounded w-48 mx-auto mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-64 mx-auto"></div>
+                </div>
+              </div>
+            ) : authContext.isAuthenticated && authContext.user ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-md border border-gray-200">
+                  <div className="p-6">
+                    <h3 className="text-2xl font-bold text-primary-700 mb-4">Mis Trámites en Curso</h3>
+                    <Table>
+                      <TableCaption>Lista de todos tus trámites registrados en el sistema</TableCaption>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID Trámite</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead>Fecha Inicio</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Progreso</TableHead>
+                          <TableHead>Próxima Acción</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {userTramites.map((tramite) => (
+                          <TableRow key={tramite.id}>
+                            <TableCell className="font-medium">{tramite.id}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {getEstadoIcon(tramite.estado)}
+                                <span>{tramite.tipo}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-xs">
+                              <p className="truncate">{tramite.descripcion}</p>
+                            </TableCell>
+                            <TableCell>{tramite.fechaInicio}</TableCell>
+                            <TableCell>{getEstadoBadge(tramite.estado)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${tramite.progreso}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm text-gray-600">{tramite.progreso}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">
+                              {tramite.proximaAccion}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push(`/tramites/${tramite.id}`)}
+                              >
+                                Ver detalles
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center">
+                  <Button 
+                    className="bg-secondary-500 hover:bg-secondary-600"
+                    onClick={() => router.push("/nuevo-tramite")}
+                  >
+                    Iniciar Nuevo Trámite
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <div className="bg-primary-50 rounded-lg p-12 max-w-2xl mx-auto">
+                  <h3 className="text-2xl font-bold text-primary-700 mb-4">Mis Trámites</h3>
+                  <p className="text-gray-600 mb-6">
+                    Para ver tus trámites en curso, debes iniciar sesión con tu cuenta personal.
+                  </p>
+                  <button
+                    onClick={() => router.push("/login")}
+                    className="bg-secondary-500 hover:bg-secondary-600 text-white font-semibold py-3 px-8 rounded-full transition-colors duration-200 shadow-md hover:shadow-lg"
+                  >
+                    Iniciar Sesión
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

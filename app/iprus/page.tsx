@@ -1,6 +1,7 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { 
   ArrowLeft, 
   Home, 
@@ -11,46 +12,181 @@ import {
   X,
   AlertCircle,
   DollarSign,
-  MapPin
+  MapPin,
+  Phone,
+  Mail,
+  Calendar,
+  FileText,
+  Building
 } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { AuthService } from "@/services/auth.service"
+import { getServiceUrl } from "@/config/api.config"
+import { IPRUSFormData } from "@/types/iprus.types"
+import { useToast } from "@/components/ui/use-toast"
+import { Parroquia } from "@/types/iprus.types"
+
+// Lista de parroquias de ejemplo (en producción vendría de una API)
+const parroquias: Parroquia[] = [
+  { id: 821, nombre: "La Floresta", canton: "Quito" },
+  { id: 822, nombre: "Iñaquito", canton: "Quito" },
+  { id: 823, nombre: "Rumipamba", canton: "Quito" },
+  { id: 824, nombre: "Jipijapa", canton: "Quito" },
+  { id: 825, nombre: "Cochapamba", canton: "Quito" },
+  { id: 826, nombre: "Concepción", canton: "Quito" },
+  { id: 827, nombre: "Kennedy", canton: "Quito" },
+  { id: 828, nombre: "San Isidro del Inca", canton: "Quito" },
+  { id: 829, nombre: "Mariscal Sucre", canton: "Quito" },
+  { id: 830, nombre: "Belisario Quevedo", canton: "Quito" }
+]
 
 export default function IPRUSForm() {
-  const [files, setFiles] = useState({
-    escritura: null as File | null,
-    levantamiento: null as File | null,
-  })
+  const router = useRouter()
+  const { isAuthenticated, loading } = useAuth()
+  const { toast } = useToast()
+  const [submitting, setSubmitting] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+  
+  const [formData, setFormData] = useState<IPRUSFormData>({
+    numeroIdentificacion: "1234567890",
+    email: "juan.perez@example.com",
+    tipoTramite: "IPRUS",
+    telefono: "0999999999",
+    direccionCalle: "Av. de los Shyris",
+    idParroquia: 821,
+    barrioSector: "La Floresta",
+    numeroLote: "Lote 23",
+    claveCatastral: "1703500101210000100",
+    escrituraAfavor: "Juan Pérez",
+    fechaInscripcion: "2023-10-01"
+  })
 
-  const handleFileUpload = (type: 'escritura' | 'levantamiento', file: File) => {
-    setFiles(prev => ({ ...prev, [type]: file }))
+  // Verificar autenticación
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      toast({
+        title: "Acceso restringido",
+        description: "Debe iniciar sesión para acceder a este formulario",
+        variant: "destructive"
+      })
+      router.push("/login")
+    }
+  }, [isAuthenticated, loading, router, toast])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'idParroquia' ? parseInt(value) : value
+    }))
   }
 
-  const removeFile = (type: 'escritura' | 'levantamiento') => {
-    setFiles(prev => ({ ...prev, [type]: null }))
+  const handleFileUpload = (newFiles: FileList | null) => {
+    if (newFiles) {
+      const fileArray = Array.from(newFiles).filter(file => 
+        file.type === 'application/pdf' || file.name.endsWith('.dwg')
+      )
+      setFiles(prev => [...prev, ...fileArray])
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
   }
 
-  const handleDrop = (e: React.DragEvent, type: 'escritura' | 'levantamiento') => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile) {
-      handleFileUpload(type, droppedFile)
-    }
+    handleFileUpload(e.dataTransfer.files)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validación básica
+    if (!formData.numeroIdentificacion || !formData.email || !formData.telefono) {
+      toast({
+        title: "Campos requeridos",
+        description: "Por favor complete todos los campos obligatorios",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (files.length === 0) {
+      toast({
+        title: "Documentos requeridos",
+        description: "Debe adjuntar al menos un documento",
+        variant: "destructive"
+      })
+      return
+    }
+
     setShowModal(true)
   }
 
-  const handleConfirm = () => {
-    // Aquí iría la lógica para enviar el formulario
-    console.log("Formulario enviado")
-    setShowModal(false)
-    // Redirigir o mostrar mensaje de éxito
+  const handleConfirm = async () => {
+    setSubmitting(true)
+    
+    try {
+      const formDataToSend = new FormData()
+      
+      // Agregar los datos como JSON string
+      formDataToSend.append('datos', JSON.stringify(formData))
+      
+      // Agregar archivos
+      files.forEach((file, index) => {
+        formDataToSend.append(`archivos`, file)
+      })
+
+      const response = await fetch(getServiceUrl('iprus', 'crearSolicitud'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AuthService.getToken()}`,
+          // NO incluir Content-Type, el browser lo setea automáticamente con boundary para multipart
+        },
+        body: formDataToSend
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al enviar la solicitud')
+      }
+
+      const result = await response.json()
+
+      toast({
+        title: "Solicitud enviada exitosamente",
+        description: `Su solicitud ha sido registrada con el ID: ${result.data?.solicitudId || 'N/A'}`,
+      })
+
+      // Redirigir a la página principal o a mis trámites
+      router.push('/')
+    } catch (error) {
+      console.error('Error al enviar solicitud:', error)
+      toast({
+        title: "Error al enviar solicitud",
+        description: "Ocurrió un error al procesar su solicitud. Por favor intente nuevamente.",
+        variant: "destructive"
+      })
+    } finally {
+      setSubmitting(false)
+      setShowModal(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-primary-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-primary-600">Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -71,239 +207,272 @@ export default function IPRUSForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* 1. Información del Predio */}
-          <div className="bg-white rounded-lg p-8 shadow-md border border-primary-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
-                <Home className="w-5 h-5 text-white" />
-              </div>
-              <h2 className="text-2xl font-semibold text-primary-700">1. Información del Predio</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Número de predio
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: 170101..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Clave catastral
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: U012345..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dirección del predio
-                </label>
-                <input
-                  type="text"
-                  placeholder="Dirección completa"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Información del Solicitante */}
+          {/* 1. Información del Solicitante */}
           <div className="bg-white rounded-lg p-8 shadow-md border border-primary-200">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
                 <User className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-2xl font-semibold text-primary-700">2. Información del Solicitante</h2>
+              <h2 className="text-2xl font-semibold text-primary-700">1. Información del Solicitante</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre del solicitante
+                  Número de Identificación <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Nombres y Apellidos"
+                  name="numeroIdentificacion"
+                  value={formData.numeroIdentificacion}
+                  onChange={handleInputChange}
+                  placeholder="Cédula o RUC"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  required
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cédula del solicitante
-                </label>
-                <input
-                  type="text"
-                  placeholder="Número de cédula"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Correo electrónico para notificaciones
+                  <Mail className="inline w-4 h-4 mr-1" />
+                  Correo Electrónico <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
-                  placeholder="notificaciones@ejemplo.com"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="correo@ejemplo.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Phone className="inline w-4 h-4 mr-1" />
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="telefono"
+                  value={formData.telefono}
+                  onChange={handleInputChange}
+                  placeholder="0999999999"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Escritura a favor de
+                </label>
+                <input
+                  type="text"
+                  name="escrituraAfavor"
+                  value={formData.escrituraAfavor}
+                  onChange={handleInputChange}
+                  placeholder="Nombre del propietario"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
             </div>
           </div>
 
-          {/* 3. Medidas del Terreno */}
+          {/* 2. Información del Predio */}
           <div className="bg-white rounded-lg p-8 shadow-md border border-primary-200">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
-                <Ruler className="w-5 h-5 text-white" />
+                <Home className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-2xl font-semibold text-primary-700">3. Medidas del Terreno</h2>
+              <h2 className="text-2xl font-semibold text-primary-700">2. Información del Predio</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Área del terreno (m²)
+                  Dirección (Calle) <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="Ej: 200"
+                  type="text"
+                  name="direccionCalle"
+                  value={formData.direccionCalle}
+                  onChange={handleInputChange}
+                  placeholder="Av. de los Shyris"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Building className="inline w-4 h-4 mr-1" />
+                  Parroquia <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="idParroquia"
+                  value={formData.idParroquia}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  required
+                >
+                  {parroquias.map(parroquia => (
+                    <option key={parroquia.id} value={parroquia.id}>
+                      {parroquia.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Barrio/Sector
+                </label>
+                <input
+                  type="text"
+                  name="barrioSector"
+                  value={formData.barrioSector}
+                  onChange={handleInputChange}
+                  placeholder="La Floresta"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Frente del terreno (m)
+                  Número de Lote
                 </label>
                 <input
-                  type="number"
-                  placeholder="Ej: 10"
+                  type="text"
+                  name="numeroLote"
+                  value={formData.numeroLote}
+                  onChange={handleInputChange}
+                  placeholder="Lote 23"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Clave Catastral
+                </label>
+                <input
+                  type="text"
+                  name="claveCatastral"
+                  value={formData.claveCatastral}
+                  onChange={handleInputChange}
+                  placeholder="1703500101210000100"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="inline w-4 h-4 mr-1" />
+                  Fecha de Inscripción
+                </label>
+                <input
+                  type="date"
+                  name="fechaInscripcion"
+                  value={formData.fechaInscripcion}
+                  onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 />
               </div>
             </div>
           </div>
 
-          {/* 4. Documentos Requeridos */}
+          {/* 3. Documentos Requeridos */}
           <div className="bg-white rounded-lg p-8 shadow-md border border-primary-200">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
                 <Paperclip className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-2xl font-semibold text-primary-700">4. Documentos Requeridos</h2>
+              <h2 className="text-2xl font-semibold text-primary-700">3. Documentos Requeridos</h2>
             </div>
             
-            <div className="space-y-6">
-              {/* Escritura */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Escritura (solo PDF)
-                </label>
-                <div
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, 'escritura')}
-                  className="border-2 border-dashed border-primary-300 rounded-lg p-8 text-center hover:border-primary-400 transition-colors bg-primary-25"
-                >
-                  {files.escritura ? (
-                    <div className="flex items-center justify-between bg-primary-100 rounded-lg p-4">
-                      <span className="text-primary-700 font-medium">{files.escritura.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile('escritura')}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-12 h-12 text-primary-400 mx-auto mb-4" />
-                      <p className="text-primary-600 font-medium mb-2">
-                        Arrastra aquí tus archivos o haz clic para seleccionar
-                      </p>
-                      <input
-                        type="file"
-                        accept=".pdf"
-                        onChange={(e) => e.target.files?.[0] && handleFileUpload('escritura', e.target.files[0])}
-                        className="hidden"
-                        id="escritura-upload"
-                      />
-                      <label
-                        htmlFor="escritura-upload"
-                        className="inline-block bg-primary-500 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-primary-600 transition-colors"
-                      >
-                        Seleccionar archivo PDF
-                      </label>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Levantamiento planimétrico */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Levantamiento planimétrico (PDF o DWG)
-                </label>
-                <div
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, 'levantamiento')}
-                  className="border-2 border-dashed border-primary-300 rounded-lg p-8 text-center hover:border-primary-400 transition-colors bg-primary-25"
-                >
-                  {files.levantamiento ? (
-                    <div className="flex items-center justify-between bg-primary-100 rounded-lg p-4">
-                      <span className="text-primary-700 font-medium">{files.levantamiento.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile('levantamiento')}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-12 h-12 text-primary-400 mx-auto mb-4" />
-                      <p className="text-primary-600 font-medium mb-2">
-                        Arrastra aquí tus archivos o haz clic para seleccionar
-                      </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Archivos PDF (Escrituras, Levantamientos, etc.) <span className="text-red-500">*</span>
+              </label>
+              <div
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                className="border-2 border-dashed border-primary-300 rounded-lg p-8 text-center hover:border-primary-400 transition-colors bg-primary-25"
+              >
+                {files.length > 0 ? (
+                  <div className="space-y-3">
+                    {files.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-primary-100 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-primary-600" />
+                          <span className="text-primary-700 font-medium">{file.name}</span>
+                          <span className="text-sm text-primary-600">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="mt-4">
                       <input
                         type="file"
                         accept=".pdf,.dwg"
-                        onChange={(e) => e.target.files?.[0] && handleFileUpload('levantamiento', e.target.files[0])}
+                        multiple
+                        onChange={(e) => handleFileUpload(e.target.files)}
                         className="hidden"
-                        id="levantamiento-upload"
+                        id="file-upload"
                       />
                       <label
-                        htmlFor="levantamiento-upload"
+                        htmlFor="file-upload"
                         className="inline-block bg-primary-500 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-primary-600 transition-colors"
                       >
-                        Seleccionar archivo PDF/DWG
+                        Agregar más archivos
                       </label>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-12 h-12 text-primary-400 mx-auto mb-4" />
+                    <p className="text-primary-600 font-medium mb-2">
+                      Arrastra aquí tus archivos o haz clic para seleccionar
+                    </p>
+                    <input
+                      type="file"
+                      accept=".pdf,.dwg"
+                      multiple
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="inline-block bg-primary-500 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-primary-600 transition-colors"
+                    >
+                      Seleccionar archivos
+                    </label>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Formatos aceptados: PDF, DWG
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          {/* 5. Botón de Envío */}
+          {/* 4. Botón de Envío */}
           <div className="text-center">
             <button
               type="submit"
-              className="bg-secondary-500 hover:bg-secondary-600 text-white font-bold py-4 px-12 rounded-lg text-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              disabled={submitting}
+              className="bg-secondary-500 hover:bg-secondary-600 text-white font-bold py-4 px-12 rounded-lg text-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Enviar Solicitud
+              {submitting ? "Enviando..." : "Enviar Solicitud"}
             </button>
           </div>
         </form>
@@ -334,7 +503,7 @@ export default function IPRUSForm() {
                     <div>
                       <h4 className="font-semibold text-gray-700 mb-2">Lugar de Pago</h4>
                       <p className="text-gray-600">
-                        Tesorería Municipal de Quito<br />
+                        Tesorería Municipal<br />
                         Av. 10 de Agosto N24-52 y Luis Cordero<br />
                         Edificio Municipal, Planta Baja<br />
                         Horario: Lunes a Viernes, 8:00 - 16:00
@@ -354,16 +523,18 @@ export default function IPRUSForm() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  disabled={submitting}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium"
+                  disabled={submitting}
+                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
                 >
-                  Confirmar y Continuar
+                  {submitting ? "Enviando..." : "Confirmar y Continuar"}
                 </button>
               </div>
             </div>
