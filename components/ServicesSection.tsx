@@ -10,6 +10,8 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
+  Home,
+  RefreshCw,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -24,21 +26,43 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import PredioSelectionModal from "@/components/PredioSelectionModal"
+import { AuthService } from "@/services/auth.service"
+import { PredioService } from "@/services/predio.service"
+import { getServiceUrl } from "@/config/api.config"
+import { PrediosResponse } from "@/types/predios.types"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function ServicesSection() {
   const router = useRouter()
   const authContext = useAuth()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("ciudadanos")
   
-  // Log para debug
+  // Verificar si hay parámetro de tab en la URL y cargar predio seleccionado
   useEffect(() => {
-    console.log("ServicesSection - Full auth context:", authContext)
-    console.log("ServicesSection - Auth state:", { 
-      isAuthenticated: authContext.isAuthenticated, 
-      user: authContext.user, 
-      loading: authContext.loading 
-    })
-  }, [authContext])
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const tabParam = urlParams.get('tab')
+      if (tabParam === 'mis-tramites') {
+        setActiveTab('mis-tramites')
+      }
+      
+      // Cargar predio seleccionado del localStorage
+      const savedPredio = PredioService.getSelectedPredio()
+      if (savedPredio) {
+        setSelectedPredio(savedPredio)
+        console.log('Loaded saved predio from localStorage:', savedPredio)
+      }
+    }
+  }, [])
+  const [selectedPredio, setSelectedPredio] = useState<string | null>(null)
+  const [showPredioModal, setShowPredioModal] = useState(false)
+  const [predios, setPredios] = useState<string[]>([])
+  const [loadingPredios, setLoadingPredios] = useState(false)
+  const [prediosError, setPrediosError] = useState<string | null>(null)
+  const [hasCheckedPredios, setHasCheckedPredios] = useState(false)
   
   // Datos de ejemplo para los trámites del usuario
   const userTramites = [
@@ -111,9 +135,106 @@ export default function ServicesSection() {
   }
   
   const handleCardClick = (title: string) => {
+    if (!selectedPredio) {
+      toast({
+        title: "Predio requerido",
+        description: "Debe seleccionar un predio antes de continuar con el trámite",
+        variant: "destructive"
+      })
+      setShowPredioModal(true)
+      return
+    }
+    
     if (title.includes("IPRUS")) {
       router.push("/iprus")
     }
+  }
+  
+  // Cargar predios cuando se cambia al tab ciudadanos
+  useEffect(() => {
+    if (activeTab === "ciudadanos" && authContext.isAuthenticated && authContext.user && !hasCheckedPredios) {
+      console.log('Triggering fetchPredios - user authenticated and ciudadanos tab selected')
+      fetchPredios()
+    }
+  }, [activeTab, authContext.isAuthenticated, authContext.user, hasCheckedPredios])
+  
+  // Solo mostrar modal si no hay predio seleccionado (ni en estado ni en localStorage)
+  useEffect(() => {
+    if (hasCheckedPredios && predios.length > 0 && !selectedPredio) {
+      setShowPredioModal(true)
+    }
+  }, [hasCheckedPredios, predios.length, selectedPredio])
+  
+  const fetchPredios = async () => {
+    if (!authContext.user) {
+      console.log('No user found, skipping fetchPredios')
+      return
+    }
+    
+    console.log('Starting fetchPredios...')
+    setLoadingPredios(true)
+    setPrediosError(null)
+    
+    try {
+      // Por ahora usaré el número de identificación de ejemplo
+      // En producción, deberías obtenerlo del usuario autenticado
+      const numeroIdentificacion = "1708324403"
+      
+      const url = `${getServiceUrl('tramites', 'prediosPorIdentificacion')}?numeroIdentificacion=${numeroIdentificacion}`
+      console.log('Fetching predios from:', url)
+      console.log('Token available:', !!AuthService.getToken())
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${AuthService.getToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Error al obtener predios')
+      }
+      
+      const data: PrediosResponse = await response.json()
+      
+      if (data.exito && data.data) {
+        setPredios(data.data)
+        setHasCheckedPredios(true)
+        
+        // El modal se mostrará automáticamente por el useEffect si no hay predio seleccionado
+      } else {
+        throw new Error(data.mensaje || 'Error al obtener predios')
+      }
+    } catch (error) {
+      console.error('Error fetching predios:', error)
+      setPrediosError(error instanceof Error ? error.message : 'Error al cargar predios')
+      toast({
+        title: "Error al cargar predios",
+        description: "No se pudieron cargar los predios disponibles",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingPredios(false)
+    }
+  }
+  
+  const handleSelectPredio = (predio: string) => {
+    setSelectedPredio(predio)
+    setShowPredioModal(false)
+    
+    // Guardar en localStorage para persistencia
+    PredioService.setSelectedPredio(predio)
+    console.log('Saved predio to localStorage:', predio)
+    
+    toast({
+      title: "Predio seleccionado",
+      description: `Se ha seleccionado el predio ${predio}`,
+    })
+  }
+  
+  const handleChangePredio = () => {
+    setShowPredioModal(true)
   }
   
   const services = [
@@ -170,6 +291,32 @@ export default function ServicesSection() {
             Mis Trámites
           </button>
         </div>
+
+        {/* Mostrar predio seleccionado cuando está en tab ciudadanos */}
+        {activeTab === "ciudadanos" && selectedPredio && (
+          <Card className="mb-6 p-4 bg-primary-50 border-primary-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
+                  <Home className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-primary-700">Predio Seleccionado</p>
+                  <p className="text-lg font-mono text-primary-900">{selectedPredio}</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleChangePredio}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Cambiar Predio
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* Content based on active tab */}
         {activeTab === "ciudadanos" ? (
@@ -297,6 +444,16 @@ export default function ServicesSection() {
             )}
           </div>
         )}
+        
+        {/* Modal de selección de predio */}
+        <PredioSelectionModal
+          isOpen={showPredioModal}
+          onClose={() => setShowPredioModal(false)}
+          predios={predios}
+          onSelectPredio={handleSelectPredio}
+          loading={loadingPredios}
+          error={prediosError}
+        />
       </div>
     </section>
   )

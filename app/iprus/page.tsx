@@ -17,7 +17,8 @@ import {
   Mail,
   Calendar,
   FileText,
-  Building
+  Building,
+  CheckCircle
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { AuthService } from "@/services/auth.service"
@@ -46,6 +47,10 @@ export default function IPRUSForm() {
   const { toast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [tramiteId, setTramiteId] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const [files, setFiles] = useState<File[]>([])
   
   const [formData, setFormData] = useState<IPRUSFormData>({
@@ -129,6 +134,17 @@ export default function IPRUSForm() {
     setShowModal(true)
   }
 
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false)
+    // Redirigir a la página principal con el tab "Mis Trámites" activo
+    router.push('/?tab=mis-tramites')
+  }
+
+  const handleErrorModalClose = () => {
+    setShowErrorModal(false)
+    setErrorMessage("")
+  }
+
   const handleConfirm = async () => {
     setSubmitting(true)
     
@@ -157,21 +173,23 @@ export default function IPRUSForm() {
       }
 
       const result = await response.json()
+      console.log('IPRUS Response:', result)
 
-      toast({
-        title: "Solicitud enviada exitosamente",
-        description: `Su solicitud ha sido registrada con el ID: ${result.data?.solicitudId || 'N/A'}`,
-      })
-
-      // Redirigir a la página principal o a mis trámites
-      router.push('/')
+      if (result.exito) {
+        // Extraer el ID del trámite del mensaje
+        const tramiteIdMatch = result.data?.match(/Trámite ID: (\d+)/) || result.mensaje?.match(/ID: (\d+)/)
+        const id = tramiteIdMatch ? tramiteIdMatch[1] : result.data || 'N/A'
+        
+        setTramiteId(id)
+        setShowSuccessModal(true)
+      } else {
+        setErrorMessage(result.mensaje || 'Error al procesar la solicitud')
+        setShowErrorModal(true)
+      }
     } catch (error) {
       console.error('Error al enviar solicitud:', error)
-      toast({
-        title: "Error al enviar solicitud",
-        description: "Ocurrió un error al procesar su solicitud. Por favor intente nuevamente.",
-        variant: "destructive"
-      })
+      setErrorMessage('Ocurrió un error al procesar su solicitud. Por favor intente nuevamente.')
+      setShowErrorModal(true)
     } finally {
       setSubmitting(false)
       setShowModal(false)
@@ -535,6 +553,65 @@ export default function IPRUSForm() {
                   className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
                 >
                   {submitting ? "Enviando..." : "Confirmar y Continuar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Éxito */}
+        {showSuccessModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-8 shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">¡Trámite Ingresado Correctamente!</h3>
+                <p className="text-gray-600 mb-4">
+                  Su solicitud de IPRUS ha sido procesada exitosamente.
+                </p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm font-medium text-green-800">ID del Trámite</p>
+                  <p className="text-lg font-bold text-green-900">{tramiteId}</p>
+                </div>
+                <p className="text-sm text-gray-600 mb-6">
+                  Puede revisar el estado de su trámite en la sección "Mis Trámites".
+                </p>
+                <button
+                  onClick={handleSuccessModalClose}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                >
+                  Ir a Mis Trámites
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Error */}
+        {showErrorModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-8 shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Error al Procesar el Trámite</h3>
+                <p className="text-gray-600 mb-4">
+                  Hubo un problema al ingresar su solicitud de IPRUS.
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-red-700">{errorMessage}</p>
+                </div>
+                <p className="text-sm text-gray-600 mb-6">
+                  Por favor, verifique sus datos e intente nuevamente.
+                </p>
+                <button
+                  onClick={handleErrorModalClose}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                >
+                  Intentar Nuevamente
                 </button>
               </div>
             </div>

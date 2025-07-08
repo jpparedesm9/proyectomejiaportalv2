@@ -1,5 +1,6 @@
 import { getAuthUrl } from '@/config/api.config'
 import { LoginRequest, LoginResponse, AuthData } from '@/types/auth.types'
+import { PredioService } from './predio.service'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_DATA_KEY = 'auth_data'
@@ -67,6 +68,9 @@ export class AuthService {
     
     // También limpiar la cookie
     document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    
+    // Limpiar datos relacionados al usuario
+    PredioService.clearSelectedPredio()
   }
 
   static getToken(): string | null {

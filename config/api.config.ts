@@ -16,6 +16,9 @@ export const apiConfig = {
         crearSolicitud: '/api/iprus/crearSolicitud',
         consultarSolicitud: '/api/iprus/consultarSolicitud',
         listarSolicitudes: '/api/iprus/listarSolicitudes'
+      },
+      tramites: {
+        prediosPorIdentificacion: '/api/tramites/predios/por-identificacion'
       }
     }
   }
