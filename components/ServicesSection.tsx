@@ -67,6 +67,11 @@ export default function ServicesSection() {
   const [userTramites, setUserTramites] = useState<TramiteDetalle[]>([])
   const [loadingTramites, setLoadingTramites] = useState(false)
   const [tramitesError, setTramitesError] = useState<string | null>(null)
+  const [showDebtModal, setShowDebtModal] = useState(false)
+  const [hasShownDebtModal, setHasShownDebtModal] = useState(false)
+  
+  // Key para localStorage para rastrear si se ha mostrado el modal de deudas
+  const DEBT_MODAL_SHOWN_KEY = 'debtModalShown'
   
   // Datos de ejemplo para los trámites del usuario
   const userTramitesExample = [
@@ -168,13 +173,67 @@ export default function ServicesSection() {
     }
   }
   
-  // Cargar predios cuando se cambia al tab ciudadanos
+  // Verificar si el modal de deudas ya se ha mostrado en esta sesión
   useEffect(() => {
-    if (activeTab === "ciudadanos" && authContext.isAuthenticated && authContext.user && !hasCheckedPredios) {
+    if (typeof window !== 'undefined') {
+      const debtModalShown = localStorage.getItem(DEBT_MODAL_SHOWN_KEY)
+      if (debtModalShown) {
+        setHasShownDebtModal(true)
+        console.log('Debt modal already shown in this session')
+      }
+    }
+  }, [])
+
+  // Limpiar estado cuando el usuario se desautentica
+  useEffect(() => {
+    if (!authContext.isAuthenticated || !authContext.user) {
+      console.log('User logged out, clearing predio state and debt modal flag')
+      setSelectedPredio(null)
+      setPredios([])
+      setHasCheckedPredios(false)
+      setShowPredioModal(false)
+      setShowDebtModal(false)
+      setHasShownDebtModal(false)
+      setUserTramites([])
+      
+      // Limpiar flag del modal de deudas del localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(DEBT_MODAL_SHOWN_KEY)
+      }
+    }
+  }, [authContext.isAuthenticated, authContext.user])
+
+  // Mostrar modal de deudas al autenticarse por primera vez
+  useEffect(() => {
+    if (authContext.isAuthenticated && authContext.user && !authContext.loading && !hasShownDebtModal) {
+      console.log('Checking if debt modal should be shown')
+      
+      // Verificar localStorage una vez más
+      const debtModalShown = localStorage.getItem(DEBT_MODAL_SHOWN_KEY)
+      if (!debtModalShown) {
+        console.log('Showing debt modal for the first time')
+        setShowDebtModal(true)
+        setHasShownDebtModal(true)
+        
+        // Marcar en localStorage que el modal ya se ha mostrado
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(DEBT_MODAL_SHOWN_KEY, 'true')
+        }
+      } else {
+        console.log('Debt modal already shown, skipping')
+        setHasShownDebtModal(true)
+      }
+    }
+  }, [authContext.isAuthenticated, authContext.user, authContext.loading, hasShownDebtModal])
+
+  // Cargar predios cuando se cambia al tab ciudadanos
+  // Solo después de que se haya mostrado el modal de deudas
+  useEffect(() => {
+    if (activeTab === "ciudadanos" && authContext.isAuthenticated && authContext.user && !hasCheckedPredios && hasShownDebtModal && !showDebtModal) {
       console.log('Triggering fetchPredios - user authenticated and ciudadanos tab selected')
       fetchPredios()
     }
-  }, [activeTab, authContext.isAuthenticated, authContext.user, hasCheckedPredios])
+  }, [activeTab, authContext.isAuthenticated, authContext.user, hasCheckedPredios, hasShownDebtModal, showDebtModal])
   
   // Cargar trámites cuando se cambia al tab mis-tramites
   useEffect(() => {
@@ -185,11 +244,12 @@ export default function ServicesSection() {
   }, [activeTab, authContext.isAuthenticated, authContext.user])
   
   // Solo mostrar modal si no hay predio seleccionado (ni en estado ni en localStorage)
+  // Y solo después de que se haya cerrado el modal de deudas
   useEffect(() => {
-    if (hasCheckedPredios && predios.length > 0 && !selectedPredio) {
+    if (hasCheckedPredios && predios.length > 0 && !selectedPredio && !showDebtModal && hasShownDebtModal) {
       setShowPredioModal(true)
     }
-  }, [hasCheckedPredios, predios.length, selectedPredio])
+  }, [hasCheckedPredios, predios.length, selectedPredio, showDebtModal, hasShownDebtModal])
   
   const fetchPredios = async () => {
     if (!authContext.user) {
@@ -204,7 +264,7 @@ export default function ServicesSection() {
     try {
       // Por ahora usaré el número de identificación de ejemplo
       // En producción, deberías obtenerlo del usuario autenticado
-      const numeroIdentificacion = "1708324403"
+      const numeroIdentificacion = "0100055375"
       
       const url = `${getServiceUrl('tramites', 'prediosPorIdentificacion')}?numeroIdentificacion=${numeroIdentificacion}`
       console.log('Fetching predios from:', url)
@@ -533,6 +593,38 @@ export default function ServicesSection() {
           </div>
         )}
         
+        {/* Modal de información de deudas */}
+        {showDebtModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-8 shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Estado de Deudas</h3>
+                <p className="text-gray-600 mb-6">
+                  Nos complace informarle que no registra deudas pendientes en su cuenta.
+                  Puede proceder con normalidad a realizar sus trámites.
+                </p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm font-medium text-green-800">
+                    ✓ Sin deudas pendientes
+                  </p>
+                  <p className="text-sm text-green-700">
+                    Cuenta al día para realizar trámites
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDebtModal(false)}
+                  className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                >
+                  Continuar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal de selección de predio */}
         <PredioSelectionModal
           isOpen={showPredioModal}

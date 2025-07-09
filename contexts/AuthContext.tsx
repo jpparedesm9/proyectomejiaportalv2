@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { AuthService } from '@/services/auth.service'
+import { PredioService } from '@/services/predio.service'
 import { LoginRequest, User, AuthData } from '@/types/auth.types'
 
 interface AuthContextType {
@@ -95,6 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await AuthService.logout()
+      // Clear predio selection when logging out
+      PredioService.clearSelectedPredio()
+      // Clear debt modal flag
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('debtModalShown')
+      }
       setUser(null)
       router.push('/login')
     } catch (error) {
