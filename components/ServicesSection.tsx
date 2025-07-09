@@ -12,6 +12,9 @@ import {
   FileText,
   Home,
   RefreshCw,
+  User,
+  Paperclip,
+  X,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -33,7 +36,7 @@ import { PredioService } from "@/services/predio.service"
 import { getServiceUrl } from "@/config/api.config"
 import { PrediosResponse } from "@/types/predios.types"
 import { useToast } from "@/components/ui/use-toast"
-import { TramiteService, TramiteDetalle } from "@/services/tramite.service"
+import { TramiteService, TramiteDetalle, TramiteDetalleCompleto } from "@/services/tramite.service"
 
 export default function ServicesSection() {
   const router = useRouter()
@@ -69,6 +72,9 @@ export default function ServicesSection() {
   const [tramitesError, setTramitesError] = useState<string | null>(null)
   const [showDebtModal, setShowDebtModal] = useState(false)
   const [hasShownDebtModal, setHasShownDebtModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [selectedTramiteDetails, setSelectedTramiteDetails] = useState<TramiteDetalleCompleto | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   
   // Key para localStorage para rastrear si se ha mostrado el modal de deudas
   const DEBT_MODAL_SHOWN_KEY = 'debtModalShown'
@@ -322,6 +328,29 @@ export default function ServicesSection() {
   const handleChangePredio = () => {
     setShowPredioModal(true)
   }
+
+  const handleVerDetalles = async (tramiteId: number) => {
+    setLoadingDetails(true)
+    try {
+      const response = await TramiteService.getTramiteDetalle(tramiteId)
+      
+      if (response.exito && response.data) {
+        setSelectedTramiteDetails(response.data)
+        setShowDetailsModal(true)
+      } else {
+        throw new Error(response.mensaje || 'Error al obtener detalles del trámite')
+      }
+    } catch (error) {
+      console.error('Error fetching tramite details:', error)
+      toast({
+        title: "Error al cargar detalles",
+        description: "No se pudieron cargar los detalles del trámite",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingDetails(false)
+    }
+  }
   
   const fetchTramites = async () => {
     if (!authContext.user) {
@@ -552,9 +581,10 @@ export default function ServicesSection() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => router.push(`/tramites/${detalle.tramite.trmId}`)}
+                                  onClick={() => handleVerDetalles(detalle.tramite.trmId)}
+                                  disabled={loadingDetails}
                                 >
-                                  Ver detalles
+                                  {loadingDetails ? "Cargando..." : "Ver detalles"}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -620,6 +650,169 @@ export default function ServicesSection() {
                 >
                   Continuar
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de detalles del trámite */}
+        {showDetailsModal && selectedTramiteDetails && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-800">Detalles del Trámite</h3>
+                  <button
+                    onClick={() => setShowDetailsModal(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Información del Trámite */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-primary-600" />
+                      Información del Trámite
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">ID:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.tramite.trmId}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Tipo:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.tramite.tipo}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Estado:</span>
+                        <span className="ml-2">{getEstadoBadge(selectedTramiteDetails.tramite.estado.toLowerCase())}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Fecha Inicio:</span>
+                        <span className="ml-2 text-sm text-gray-800">
+                          {new Date(selectedTramiteDetails.tramite.fechaInicio).toLocaleDateString('es-EC', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Observaciones:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.tramite.observaciones || 'Sin observaciones'}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Estado Proceso:</span>
+                        <span className="ml-2">
+                          <Badge variant="outline">{selectedTramiteDetails.estadoProceso}</Badge>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Información del Propietario */}
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <User className="w-5 h-5 text-blue-600" />
+                      Propietario
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Nombre:</span>
+                        <span className="ml-2 text-sm text-gray-800">
+                          {selectedTramiteDetails.propietario.nombres} {selectedTramiteDetails.propietario.apellidos}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Identificación:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.propietario.numeroIdentificacion}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Teléfono:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.propietario.telefonoUno || 'No disponible'}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Correo:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.propietario.correo || 'No disponible'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Información del Predio */}
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <Home className="w-5 h-5 text-green-600" />
+                      Predio
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Clave Catastral:</span>
+                        <span className="ml-2 text-sm text-gray-800 font-mono">{selectedTramiteDetails.predio.claveCatastral}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Dirección:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.predio.calles}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Barrio:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.predio.nombreBarrio}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Parroquia:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.predio.nombreParroquia}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Número Predio:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.predio.numeroPredio || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-gray-600">Número Lote:</span>
+                        <span className="ml-2 text-sm text-gray-800">{selectedTramiteDetails.predio.numeroLote || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Documentos */}
+                  <div className="bg-yellow-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <Paperclip className="w-5 h-5 text-yellow-600" />
+                      Documentos ({selectedTramiteDetails.documentos.length})
+                    </h4>
+                    {selectedTramiteDetails.documentos.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedTramiteDetails.documentos.map((doc) => (
+                          <div key={doc.docId} className="flex items-center gap-2 p-2 bg-white rounded border">
+                            <FileText className="w-4 h-4 text-gray-600" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-800">{doc.nombreOriginal}</p>
+                              <p className="text-xs text-gray-500">
+                                Subido: {new Date(doc.fechaSubida).toLocaleDateString('es-EC')}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600">No hay documentos adjuntos</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={() => setShowDetailsModal(false)}
+                    className="bg-primary-600 hover:bg-primary-700 text-white"
+                  >
+                    Cerrar
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

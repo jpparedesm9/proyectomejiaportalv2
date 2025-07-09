@@ -63,6 +63,46 @@ export interface PredioResponse {
   data: PredioData
 }
 
+export interface TramiteDetalleCompleto {
+  tramite: Tramite
+  documentos: Array<{
+    docId: number
+    nombreOriginal: string
+    referenceId: string
+    fechaSubida: string
+  }>
+  seguimientos: any[]
+  propietario: {
+    nombres: string
+    apellidos: string
+    correo: string | null
+    numeroIdentificacion: string
+    telefonoUno: string
+  }
+  predio: {
+    claveCatastral: string
+    numeroPredio: string | null
+    calles: string
+    nombreBarrio: string
+    numeroLote: string | null
+    nombreParroquia: string
+    idParroquia: number
+  }
+  taskId: string | null
+  nombreTareaActual: string | null
+  estadoProceso: string
+  datosEspecificos: {
+    tipoSolicitud: string | null
+    fechaInscripcion: string
+  }
+}
+
+export interface TramiteDetalleResponse {
+  exito: boolean
+  mensaje: string
+  data: TramiteDetalleCompleto
+}
+
 export class TramiteService {
   static async getActivosPorIdentificacion(numeroIdentificacion: string): Promise<TramitesActivosResponse> {
     const url = `http://localhost:8082/api/tramites/detalle/activos-por-identificacion?numeroIdentificacion=${numeroIdentificacion}`
@@ -118,6 +158,25 @@ export class TramiteService {
     }
     
     const data: PredioResponse = await response.json()
+    return data
+  }
+
+  static async getTramiteDetalle(tramiteId: number): Promise<TramiteDetalleResponse> {
+    const url = `http://localhost:8082/api/tramites/${tramiteId}/detalle`
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${AuthService.getToken()}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Error al obtener detalle del trámite: ${response.status}`)
+    }
+    
+    const data: TramiteDetalleResponse = await response.json()
     return data
   }
 }
