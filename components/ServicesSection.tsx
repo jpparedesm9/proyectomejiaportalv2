@@ -280,8 +280,10 @@ export default function ServicesSection() {
       const response = await TramiteService.getActivosPorIdentificacion(numeroIdentificacion)
       
       if (response.exito && response.data) {
-        setUserTramites(response.data)
-        console.log('Tramites loaded:', response.data)
+        // Ordenar los trámites de manera descendente por ID (más recientes primero)
+        const sortedTramites = [...response.data].sort((a, b) => b.tramite.trmId - a.tramite.trmId)
+        setUserTramites(sortedTramites)
+        console.log('Tramites loaded:', sortedTramites)
       } else {
         throw new Error(response.mensaje || 'Error al obtener trámites')
       }

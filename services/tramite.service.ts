@@ -33,6 +33,36 @@ export interface TramitesActivosResponse {
   data: TramiteDetalle[]
 }
 
+export interface PropietarioData {
+  nombres: string
+  apellidos: string
+  correo: string | null
+  numeroIdentificacion: string
+  telefonoUno: string
+}
+
+export interface PropietarioResponse {
+  exito: boolean
+  mensaje: string
+  data: PropietarioData
+}
+
+export interface PredioData {
+  claveCatastral: string
+  numeroPredio: string | null
+  calles: string
+  nombreBarrio: string
+  numeroLote: string | null
+  nombreParroquia: string
+  idParroquia: number
+}
+
+export interface PredioResponse {
+  exito: boolean
+  mensaje: string
+  data: PredioData
+}
+
 export class TramiteService {
   static async getActivosPorIdentificacion(numeroIdentificacion: string): Promise<TramitesActivosResponse> {
     const url = `http://localhost:8082/api/tramites/detalle/activos-por-identificacion?numeroIdentificacion=${numeroIdentificacion}`
@@ -50,6 +80,44 @@ export class TramiteService {
     }
     
     const data: TramitesActivosResponse = await response.json()
+    return data
+  }
+
+  static async getPropietarioPorIdentificacion(numeroIdentificacion: string): Promise<PropietarioResponse> {
+    const url = `http://localhost:8082/api/tramites/obtenerPropietarioPorNumeroIdentificacion?numeroIdentificacion=${numeroIdentificacion}`
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${AuthService.getToken()}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Error al obtener propietario: ${response.status}`)
+    }
+    
+    const data: PropietarioResponse = await response.json()
+    return data
+  }
+
+  static async getPredioPorClave(claveCatastral: string): Promise<PredioResponse> {
+    const url = `http://localhost:8082/api/tramites/obtenerPredioPorClave?claveCatastral=${claveCatastral}`
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${AuthService.getToken()}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Error al obtener predio: ${response.status}`)
+    }
+    
+    const data: PredioResponse = await response.json()
     return data
   }
 }

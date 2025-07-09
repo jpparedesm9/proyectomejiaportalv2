@@ -26,6 +26,8 @@ import { getServiceUrl } from "@/config/api.config"
 import { IPRUSFormData } from "@/types/iprus.types"
 import { useToast } from "@/components/ui/use-toast"
 import { Parroquia } from "@/types/iprus.types"
+import { TramiteService } from "@/services/tramite.service"
+import { PredioService } from "@/services/predio.service"
 
 // Lista de parroquias de ejemplo (en producción vendría de una API)
 const parroquias: Parroquia[] = [
@@ -54,18 +56,20 @@ export default function IPRUSForm() {
   const [files, setFiles] = useState<File[]>([])
   
   const [formData, setFormData] = useState<IPRUSFormData>({
-    numeroIdentificacion: "1234567890",
-    email: "juan.perez@example.com",
+    numeroIdentificacion: "",
+    email: "",
     tipoTramite: "IPRUS",
-    telefono: "0999999999",
-    direccionCalle: "Av. de los Shyris",
+    telefono: "",
+    direccionCalle: "",
     idParroquia: 821,
-    barrioSector: "La Floresta",
-    numeroLote: "Lote 23",
-    claveCatastral: "1703500101210000100",
-    escrituraAfavor: "Juan Pérez",
-    fechaInscripcion: "2023-10-01"
+    barrioSector: "",
+    numeroLote: "",
+    claveCatastral: "",
+    escrituraAfavor: "",
+    fechaInscripcion: ""
   })
+  const [loadingPropietario, setLoadingPropietario] = useState(false)
+  const [loadingPredio, setLoadingPredio] = useState(false)
 
   // Verificar autenticación
   useEffect(() => {
@@ -79,12 +83,114 @@ export default function IPRUSForm() {
     }
   }, [isAuthenticated, loading, router, toast])
 
+  // Función para obtener datos del propietario
+  const fetchPropietarioData = async (identificacion: string) => {
+    if (!identificacion || identificacion.length !== 10) return
+    
+    setLoadingPropietario(true)
+    try {
+      const response = await TramiteService.getPropietarioPorIdentificacion(identificacion)
+      
+      if (response.exito && response.data) {
+        const { nombres, apellidos, correo, telefonoUno } = response.data
+        
+        setFormData(prev => ({
+          ...prev,
+          escrituraAfavor: `${nombres} ${apellidos}`.trim(),
+          email: correo || prev.email,
+          telefono: telefonoUno && telefonoUno !== "0" ? telefonoUno : prev.telefono
+        }))
+        
+        toast({
+          title: "Datos cargados",
+          description: "Se han cargado los datos del propietario correctamente",
+        })
+      }
+    } catch (error) {
+      console.error('Error al obtener datos del propietario:', error)
+      // No mostrar error, solo log en consola
+    } finally {
+      setLoadingPropietario(false)
+    }
+  }
+
+  // Función para obtener datos del predio
+  const fetchPredioData = async (claveCatastral: string) => {
+    if (!claveCatastral) return
+    
+    setLoadingPredio(true)
+    try {
+      const response = await TramiteService.getPredioPorClave(claveCatastral)
+      
+      if (response.exito && response.data) {
+        const { calles, nombreBarrio, numeroLote, idParroquia } = response.data
+        
+        setFormData(prev => ({
+          ...prev,
+          direccionCalle: calles || prev.direccionCalle,
+          barrioSector: nombreBarrio || prev.barrioSector,
+          numeroLote: numeroLote || prev.numeroLote,
+          idParroquia: idParroquia || prev.idParroquia,
+          claveCatastral: claveCatastral
+        }))
+        
+        toast({
+          title: "Datos del predio cargados",
+          description: "Se han cargado los datos del predio correctamente",
+        })
+      }
+    } catch (error) {
+      console.error('Error al obtener datos del predio:', error)
+      toast({
+        title: "Error al cargar predio",
+        description: "No se pudieron cargar los datos del predio seleccionado",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingPredio(false)
+    }
+  }
+
+  // Cargar datos del propietario al iniciar
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      // Usar el número de identificación hardcodeado temporalmente
+      const numeroIdentificacionTemporal = "0100055375"
+      setFormData(prev => ({
+        ...prev,
+        numeroIdentificacion: numeroIdentificacionTemporal
+      }))
+      fetchPropietarioData(numeroIdentificacionTemporal)
+    }
+  }, [isAuthenticated, loading])
+
+  // Cargar datos del predio seleccionado
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      const selectedPredio = PredioService.getSelectedPredio()
+      if (selectedPredio) {
+        fetchPredioData(selectedPredio)
+      } else {
+        toast({
+          title: "Predio no seleccionado",
+          description: "Por favor seleccione un predio antes de continuar",
+          variant: "destructive"
+        })
+      }
+    }
+  }, [isAuthenticated, loading])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
       [name]: name === 'idParroquia' ? parseInt(value) : value
     }))
+    
+    // Auto-fetch cuando el número de identificación tiene 10 dígitos
+    if (name === 'numeroIdentificacion' && value.length === 10) {
+      fetchPropietarioData(value)
+    }
   }
 
   const handleFileUpload = (newFiles: FileList | null) => {
@@ -239,15 +345,25 @@ export default function IPRUSForm() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Número de Identificación <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="numeroIdentificacion"
-                  value={formData.numeroIdentificacion}
-                  onChange={handleInputChange}
-                  placeholder="Cédula o RUC"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="numeroIdentificacion"
+                    value={formData.numeroIdentificacion}
+                    onChange={handleInputChange}
+                    placeholder="Cédula o RUC"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                    required
+                  />
+                  {loadingPropietario && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ingrese 10 dígitos para cargar datos automáticamente
+                </p>
               </div>
               
               <div>
@@ -305,6 +421,11 @@ export default function IPRUSForm() {
                 <Home className="w-5 h-5 text-white" />
               </div>
               <h2 className="text-2xl font-semibold text-primary-700">2. Información del Predio</h2>
+              {loadingPredio && (
+                <div className="ml-auto">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                </div>
+              )}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -381,8 +502,12 @@ export default function IPRUSForm() {
                   value={formData.claveCatastral}
                   onChange={handleInputChange}
                   placeholder="1703500101210000100"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-gray-50"
+                  readOnly
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Clave catastral del predio seleccionado
+                </p>
               </div>
 
               <div>
