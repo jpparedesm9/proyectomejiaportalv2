@@ -369,12 +369,12 @@ export default function ServicesSection() {
     {
       icon: MapPin,
       title: "Informe de Compatibilidad de Uso de Suelo (ICUS)",
-      description: "Informe técnico que evalúa la compatibilidad entre el uso propuesto y las regulaciones urbanísticas del área, determinando la viabilidad de un proyecto en un terreno específico.",
+      description: "Generar el Informe de Compatibilidad de Uso de Suelo (ICUS) que contiene la información básica sobre los usos permitidos o prohibidos para la implantación de actividades económicas de un predio.",
     },
     {
       icon: Map,
       title: "Informe Previo de Regulación Urbana de Suelo (IPRUS)",
-      description: "Consulta previa que proporciona información sobre las normativas urbanísticas aplicables a un terreno, incluyendo indicadores como FOT, FOS, alturas máximas y usos permitidos.",
+      description: "Generar el Informe Predial de Regulaciones de Usos de Suelo (IPRUS) para brindar información de las especificaciones obligatorias que aplican a un predio y necesarias para la respectiva habilitación del suelo.",
     },
     {
       icon: FileImage,
