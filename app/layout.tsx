@@ -22,6 +22,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
+      <head>
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#3b8541" />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <Header />

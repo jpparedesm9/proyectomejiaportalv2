@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Windows compatibility fixes */
+@supports not (color: rgb(var(--test))) {
+  /* Fallback for browsers that don't support CSS variables in rgb() */
+  body {
+    color: #255229 !important;
+    background: #f3f8f4 !important;
+  }
+  
+  .text-primary-600 { color: #3b8541 !important; }
+  .text-primary-700 { color: #2d6431 !important; }
+  .bg-primary-600 { background-color: #3b8541 !important; }
+  .bg-primary-700 { background-color: #2d6431 !important; }
+  .bg-primary-50 { background-color: #f3f8f4 !important; }
+  .bg-primary-100 { background-color: #e8f3e9 !important; }
+  
+  .text-secondary-500 { color: #e6a91f !important; }
+  .bg-secondary-500 { background-color: #e6a91f !important; }
+  .bg-secondary-600 { background-color: #cc8f0d !important; }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -30,9 +50,9 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     
-    --foreground-rgb: 37, 82, 41;
-    --background-start-rgb: 243, 248, 244;
-    --background-end-rgb: 255, 255, 255;
+    --foreground-rgb: 37 82 41;
+    --background-start-rgb: 243 248 244;
+    --background-end-rgb: 255 255 255;
   }
  
   .dark {
@@ -65,15 +85,21 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground-rgb: 243, 248, 244;
-    --background-start-rgb: 37, 82, 41;
-    --background-end-rgb: 32, 67, 34;
+    --foreground-rgb: 243 248 244;
+    --background-start-rgb: 37 82 41;
+    --background-end-rgb: 32 67 34;
   }
 }
 
 body {
+  /* Fallback colors for Windows compatibility */
+  color: #255229;
+  background: #f3f8f4;
+  
+  /* Modern browsers with CSS variables support */
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+  
   padding-top: 120px;
   overflow-x: hidden;
 }
