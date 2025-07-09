@@ -33,6 +33,7 @@ import { PredioService } from "@/services/predio.service"
 import { getServiceUrl } from "@/config/api.config"
 import { PrediosResponse } from "@/types/predios.types"
 import { useToast } from "@/components/ui/use-toast"
+import { TramiteService, TramiteDetalle } from "@/services/tramite.service"
 
 export default function ServicesSection() {
   const router = useRouter()
@@ -63,9 +64,12 @@ export default function ServicesSection() {
   const [loadingPredios, setLoadingPredios] = useState(false)
   const [prediosError, setPrediosError] = useState<string | null>(null)
   const [hasCheckedPredios, setHasCheckedPredios] = useState(false)
+  const [userTramites, setUserTramites] = useState<TramiteDetalle[]>([])
+  const [loadingTramites, setLoadingTramites] = useState(false)
+  const [tramitesError, setTramitesError] = useState<string | null>(null)
   
   // Datos de ejemplo para los trámites del usuario
-  const userTramites = [
+  const userTramitesExample = [
     {
       id: "TR-2024-001",
       tipo: "IPRUS",
@@ -105,7 +109,8 @@ export default function ServicesSection() {
   ]
   
   const getEstadoBadge = (estado: string) => {
-    switch (estado) {
+    const estadoLower = estado.toLowerCase()
+    switch (estadoLower) {
       case "en_proceso":
         return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">En Proceso</Badge>
       case "completado":
@@ -114,13 +119,20 @@ export default function ServicesSection() {
         return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Pendiente</Badge>
       case "rechazado":
         return <Badge variant="destructive">Rechazado</Badge>
+      case "ingresado":
+        return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200">Ingresado</Badge>
+      case "aprobado":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Aprobado</Badge>
+      case "en_revision":
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">En Revisión</Badge>
       default:
         return <Badge>{estado}</Badge>
     }
   }
   
   const getEstadoIcon = (estado: string) => {
-    switch (estado) {
+    const estadoLower = estado.toLowerCase()
+    switch (estadoLower) {
       case "en_proceso":
         return <Clock className="w-4 h-4 text-blue-600" />
       case "completado":
@@ -129,6 +141,12 @@ export default function ServicesSection() {
         return <AlertCircle className="w-4 h-4 text-yellow-600" />
       case "rechazado":
         return <AlertCircle className="w-4 h-4 text-red-600" />
+      case "ingresado":
+        return <FileText className="w-4 h-4 text-purple-600" />
+      case "aprobado":
+        return <CheckCircle className="w-4 h-4 text-green-600" />
+      case "en_revision":
+        return <Clock className="w-4 h-4 text-blue-600" />
       default:
         return <FileText className="w-4 h-4 text-gray-600" />
     }
@@ -157,6 +175,14 @@ export default function ServicesSection() {
       fetchPredios()
     }
   }, [activeTab, authContext.isAuthenticated, authContext.user, hasCheckedPredios])
+  
+  // Cargar trámites cuando se cambia al tab mis-tramites
+  useEffect(() => {
+    if (activeTab === "mis-tramites" && authContext.isAuthenticated && authContext.user) {
+      console.log('Loading user tramites...')
+      fetchTramites()
+    }
+  }, [activeTab, authContext.isAuthenticated, authContext.user])
   
   // Solo mostrar modal si no hay predio seleccionado (ni en estado ni en localStorage)
   useEffect(() => {
@@ -235,6 +261,41 @@ export default function ServicesSection() {
   
   const handleChangePredio = () => {
     setShowPredioModal(true)
+  }
+  
+  const fetchTramites = async () => {
+    if (!authContext.user) {
+      console.log('No user found, skipping fetchTramites')
+      return
+    }
+    
+    console.log('Starting fetchTramites...')
+    setLoadingTramites(true)
+    setTramitesError(null)
+    
+    try {
+      // Por ahora usaré el número de identificación de ejemplo
+      const numeroIdentificacion = "0100055375"
+      
+      const response = await TramiteService.getActivosPorIdentificacion(numeroIdentificacion)
+      
+      if (response.exito && response.data) {
+        setUserTramites(response.data)
+        console.log('Tramites loaded:', response.data)
+      } else {
+        throw new Error(response.mensaje || 'Error al obtener trámites')
+      }
+    } catch (error) {
+      console.error('Error fetching tramites:', error)
+      setTramitesError(error instanceof Error ? error.message : 'Error al cargar trámites')
+      toast({
+        title: "Error al cargar trámites",
+        description: "No se pudieron cargar los trámites activos",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingTramites(false)
+    }
   }
   
   const services = [
@@ -358,62 +419,87 @@ export default function ServicesSection() {
                 <div className="bg-white rounded-lg shadow-md border border-gray-200">
                   <div className="p-6">
                     <h3 className="text-2xl font-bold text-primary-700 mb-4">Mis Trámites en Curso</h3>
-                    <Table>
-                      <TableCaption>Lista de todos tus trámites registrados en el sistema</TableCaption>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID Trámite</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Descripción</TableHead>
-                          <TableHead>Fecha Inicio</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead>Progreso</TableHead>
-                          <TableHead>Próxima Acción</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {userTramites.map((tramite) => (
-                          <TableRow key={tramite.id}>
-                            <TableCell className="font-medium">{tramite.id}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {getEstadoIcon(tramite.estado)}
-                                <span>{tramite.tipo}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="max-w-xs">
-                              <p className="truncate">{tramite.descripcion}</p>
-                            </TableCell>
-                            <TableCell>{tramite.fechaInicio}</TableCell>
-                            <TableCell>{getEstadoBadge(tramite.estado)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <div className="w-20 bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${tramite.progreso}%` }}
-                                  />
-                                </div>
-                                <span className="text-sm text-gray-600">{tramite.progreso}%</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm text-gray-600">
-                              {tramite.proximaAccion}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => router.push(`/tramites/${tramite.id}`)}
-                              >
-                                Ver detalles
-                              </Button>
-                            </TableCell>
+                    {loadingTramites ? (
+                      <div className="py-8">
+                        <div className="animate-pulse space-y-4">
+                          <div className="h-4 bg-gray-200 rounded w-full"></div>
+                          <div className="h-4 bg-gray-200 rounded w-full"></div>
+                          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        </div>
+                      </div>
+                    ) : tramitesError ? (
+                      <div className="py-8 text-center">
+                        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                        <p className="text-red-600">{tramitesError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={fetchTramites}
+                          className="mt-4"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Reintentar
+                        </Button>
+                      </div>
+                    ) : userTramites.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No tienes trámites activos en este momento</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableCaption>Lista de todos tus trámites registrados en el sistema</TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID Trámite</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead>Fecha Inicio</TableHead>
+                            <TableHead>Observaciones</TableHead>
+                            <TableHead>Estado Proceso</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {userTramites.map((detalle) => (
+                            <TableRow key={detalle.tramite.trmId}>
+                              <TableCell className="font-medium">{detalle.tramite.trmId}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {getEstadoIcon(detalle.tramite.estado.toLowerCase())}
+                                  <span>{detalle.tramite.tipo}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{getEstadoBadge(detalle.tramite.estado.toLowerCase())}</TableCell>
+                              <TableCell>
+                                {new Date(detalle.tramite.fechaInicio).toLocaleDateString('es-EC', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </TableCell>
+                              <TableCell className="max-w-xs">
+                                <p className="truncate text-sm text-gray-600">
+                                  {detalle.tramite.observaciones || 'Sin observaciones'}
+                                </p>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{detalle.estadoProceso}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/tramites/${detalle.tramite.trmId}`)}
+                                >
+                                  Ver detalles
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
                   </div>
                 </div>
                 
