@@ -594,15 +594,6 @@ export default function ServicesSection() {
                     )}
                   </div>
                 </div>
-                
-                <div className="flex justify-center">
-                  <Button 
-                    className="bg-secondary-500 hover:bg-secondary-600"
-                    onClick={() => router.push("/nuevo-tramite")}
-                  >
-                    Iniciar Nuevo Trámite
-                  </Button>
-                </div>
               </div>
             ) : (
               <div className="text-center py-16">
